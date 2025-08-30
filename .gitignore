@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OpenMC specific
+*.h5
+*.xml
+!cross_sections_template.xml
+openmc-data/
+statepoint.*
+summary.h5
+tallies.out
+tracks.*
+plots.xml
+geometry.xml
+materials.xml
+settings.xml
+model.xml
+*.vti
+*.pvd
+*.vtu
+
+# Micromamba/conda
+bin/micromamba
+bin/mamba
+.mamba/
+mambaforge/
+miniforge3/
+.conda/
+conda-meta/
+
+# Project specific
+.openmc_xs_path
+.envrc.local
+*.log
+*.out
+
+# Streamlit
+.streamlit/cache/
+.streamlit/secrets.toml
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.hypothesis/
+
+# Documentation
+docs/_build/

@@ -1,0 +1,14 @@
+name: nuclear-sandbox
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - openmc
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - h5py
+  - streamlit
+  - pip
+
