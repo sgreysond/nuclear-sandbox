@@ -403,24 +403,33 @@ if do_run:
 			if rows:
 				import pandas as _pd
 				df_heat = _pd.DataFrame(rows, columns=["Region", "Power [W]", "Std [W]", "W/m"])
-				st.markdown("**Region heating** (neutron & gamma energy deposition)")
-				st.dataframe(df_heat.style.format({
-					"Power [W]": "{:.2e}",
-					"Std [W]": "{:.2e}", 
-					"W/m": "{:.2e}"
-				}))
-				st.markdown(f"**Total thermal power:** {total_W:.2e} W  ({total_W/height_m:.2e} W/m)")
-				# Compare to fusion neutron power lower-bound
-				try:
-					E_n_eV = 2.45e6 if source_type == "dd" else 14.1e6 if source_type == "dt" else 1e5
-					P_neutron_W = source_rate_n_per_s * E_n_eV * eV_to_J
-					st.caption(f"Neutron power lower-bound (ignoring non-neutron channels): {P_neutron_W:.2e} W")
-				except Exception:
-					pass
-			# Fuel fission power (kappa-fission)
-			with col2:
-				try:
-					tk = sp.get_tally(name="kappa_fission_fuel")
+                                st.markdown("**Region heating** (neutron & gamma energy deposition)")
+                                st.dataframe(df_heat.style.format({
+                                        "Power [W]": "{:.2e}",
+                                        "Std [W]": "{:.2e}",
+                                        "W/m": "{:.2e}"
+                                }))
+                                st.markdown(f"**Total thermal power:** {total_W:.2e} W  ({total_W/height_m:.2e} W/m)")
+                                # Compare to fusion neutron power lower-bound
+                                try:
+                                        E_n_eV = 2.45e6 if source_type == "dd" else 14.1e6 if source_type == "dt" else 1e5
+                                        P_neutron_W = source_rate_n_per_s * E_n_eV * eV_to_J
+                                        st.caption(f"Neutron power lower-bound (ignoring non-neutron channels): {P_neutron_W:.2e} W")
+                                except Exception:
+                                        pass
+                                # Net power estimate including fusion output and electrical input
+                                fusion_W = 0.0
+                                if source_type in ("pp", "dd", "dt"):
+                                        try:
+                                                _, fusion_W, _ = power_balance(source_type, fusor_voltage_kV, fusor_current_mA, source_rate_n_per_s)
+                                        except Exception:
+                                                fusion_W = 0.0
+                                net_W = total_W + fusion_W - P_elec_W
+                                st.metric("Net power", f"{net_W:.2e} W")
+                                # Fuel fission power (kappa-fission)
+                                with col2:
+                                        try:
+                                                tk = sp.get_tally(name="kappa_fission_fuel")
 					kappa_df = tk.get_pandas_dataframe()
 					if not kappa_df.empty:
 						# Convert from eV/particle to watts

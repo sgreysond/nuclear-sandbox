@@ -15,6 +15,7 @@ A Python-based neutron flux simulator for hybrid nuclear reactor designs, focusi
   - End reflectors to reduce axial leakage
   - Multi-source arrays for improved coupling
 - **Interactive Streamlit GUI** with real-time visualization and progress tracking
+- **Net power metric** estimating thermal + fusion output minus electrical input
 - **Comprehensive testing** suite with unit, integration, and end-to-end tests
 
 ## Quick Start
@@ -70,6 +71,18 @@ Then open http://localhost:8501 in your browser.
 - Click "Apply preset: Fast (DU, low-cost)"
 - Uses depleted uranium (0.2% U-235), no moderator, thick reflectors
 - Leverages U-238 fast fission with 14 MeV neutrons from D-T source
+
+### Parameter Optimization
+
+A helper script performs a coarse grid search to find the smallest
+cylindrical design that yields net-positive thermal power after accounting for
+the neutron source electrical input:
+
+```bash
+python scripts/optimize_reactor.py
+```
+
+This requires OpenMC nuclear data and can take several minutes to run.
 
 ## Project Structure
 
