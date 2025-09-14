@@ -21,14 +21,15 @@ try:
 		build_fusor_cylindrical_model,
 		run_model,
 	)
-	from openmc_hybrid.fusion_physics import (
-		neutron_yield_rate,
-		power_balance,
-	)
-	import numpy as np
-	import pandas as pd
-	import matplotlib.pyplot as plt
-	import openmc
+        from openmc_hybrid.fusion_physics import (
+                neutron_yield_rate,
+                power_balance,
+        )
+        from openmc_hybrid.optimizer import optimize_min_reactor
+        import numpy as np
+        import pandas as pd
+        import matplotlib.pyplot as plt
+        import openmc
 except Exception:
 	st.error("Python dependencies not fully installed. Ensure the conda env from environment.yml is active.")
 	st.stop()
@@ -53,23 +54,34 @@ with st.sidebar:
 		moderator = st.selectbox("Moderator", ["water", "graphite", "heavy_water", "none"], index=0)
 		moderator_opt = None if moderator == "none" else moderator
 
-		st.subheader("Source")
-		source_type = st.selectbox(
-			"Source type",
-			["dd", "dt", "watt_u235", "watt_pu239", "watt_custom", "maxwell"],
-			index=0,
-		)
-		watt_a_eV = watt_b_inv_eV = maxwell_kT_eV = None
-		if source_type == "watt_custom":
-			watt_a_eV = st.number_input("Watt a [eV]", 1e5, 5e6, 9.88e5, 1e4, format="%e")
-			watt_b_inv_eV = st.number_input("Watt b [1/eV]", 1e-7, 1e-5, 2.249e-6, 1e-7, format="%e")
-		elif source_type == "maxwell":
-			maxwell_kT_eV = st.number_input("Maxwell kT [eV]", 1.0, 1e6, 2.0e3, 1.0, format="%e")
+                st.subheader("Source")
+                source_type = st.selectbox(
+                        "Source type",
+                        ["dd", "dt", "watt_u235", "watt_pu239", "watt_custom", "maxwell"],
+                        index=0,
+                )
+                watt_a_eV = watt_b_inv_eV = maxwell_kT_eV = None
+                if source_type == "watt_custom":
+                        watt_a_eV = st.number_input("Watt a [eV]", 1e5, 5e6, 9.88e5, 1e4, format="%e")
+                        watt_b_inv_eV = st.number_input("Watt b [1/eV]", 1e-7, 1e-5, 2.249e-6, 1e-7, format="%e")
+                elif source_type == "maxwell":
+                        maxwell_kT_eV = st.number_input("Maxwell kT [eV]", 1.0, 1e6, 2.0e3, 1.0, format="%e")
 
-		st.subheader("Run")
-		particles = int(st.number_input("Particles", 1000, 5_000_000, 50_000, 1000))
-		batches = int(st.number_input("Batches", 1, 10_000, 50, 1))
-		do_run = st.button("Run OpenMC")
+                if source_type in ("dd", "dt"):
+                        fusor_voltage_kV = st.number_input("Fusor voltage [kV]", 1.0, 200.0, 50.0, 1.0)
+                        fusor_current_mA = st.number_input("Fusor current [mA]", 0.1, 500.0, 20.0, 0.1)
+                        fusor_pressure_mTorr = st.number_input("Operating pressure [mTorr]", 0.001, 10.0, 1.0, 0.1)
+                        source_rate_n_per_s = neutron_yield_rate(source_type, fusor_voltage_kV, fusor_current_mA, fusor_pressure_mTorr)
+                else:
+                        fusor_voltage_kV = fusor_current_mA = fusor_pressure_mTorr = 0.0
+                        source_rate_n_per_s = st.number_input("Source rate [n/s]", min_value=1.0, max_value=1e15, value=1e8, step=1e3, format="%e")
+                st.caption(f"Neutron source rate: {source_rate_n_per_s:.2e} n/s")
+
+                st.subheader("Run")
+                particles = int(st.number_input("Particles", 1000, 5_000_000, 50_000, 1000))
+                batches = int(st.number_input("Batches", 1, 10_000, 50, 1))
+                do_run = st.button("Run OpenMC")
+                do_opt = st.button("Optimize size", key="optimize_simple")
 
 	else:
 		st.subheader("Fusor geometry (cylindrical)")
@@ -207,9 +219,10 @@ with st.sidebar:
 				help="Runs the same geometry in eigenvalue mode to report k_eff and multiplication M≈1/(1−k_eff).")
 		with col_run2:
 			n_sources_azimuthal = int(st.number_input("Azimuthal sources (ring)", 1, 32, 6, 1, key="n_sources_azimuthal"))
-			n_sources_axial = int(st.number_input("Axial sources", 1, 32, 3, 1, key="n_sources_axial"))
-			source_ring_radius_fraction = float(st.slider("Source ring radius (fraction of inner radius)", 0.1, 0.99, 0.9, 0.01, key="source_ring_radius_fraction"))
-			do_run = st.button("Run OpenMC")
+                        n_sources_axial = int(st.number_input("Axial sources", 1, 32, 3, 1, key="n_sources_axial"))
+                        source_ring_radius_fraction = float(st.slider("Source ring radius (fraction of inner radius)", 0.1, 0.99, 0.9, 0.01, key="source_ring_radius_fraction"))
+                        do_run = st.button("Run OpenMC")
+                        do_opt = False
 
 
 st.write("Environment")
@@ -221,7 +234,33 @@ if not xs:
 		xs = default_xs
 st.code(f"OPENMC_CROSS_SECTIONS={xs}")
 if not xs:
-	st.warning("OPENMC_CROSS_SECTIONS is not set. Place data under openmc-data/ or set the path above.")
+        st.warning("OPENMC_CROSS_SECTIONS is not set. Place data under openmc-data/ or set the path above.")
+
+if do_opt:
+        if source_type not in ("dd", "dt"):
+                st.warning("Optimization requires a fusion source (dd or dt).")
+        else:
+                try:
+                        result = optimize_min_reactor(
+                                source_type=source_type,
+                                voltage_kV=fusor_voltage_kV,
+                                current_mA=fusor_current_mA,
+                                pressure_mTorr=fusor_pressure_mTorr,
+                                source_rate_n_per_s=source_rate_n_per_s,
+                                geometry_kind=geometry_kind,
+                                fuel_enrichment_wt_pct=fuel_enrichment_wt_pct,
+                                fuel_density_gcc=fuel_density_gcc,
+                                moderator=moderator_opt,
+                                particles=particles,
+                                batches=batches,
+                        )
+                        if result is not None:
+                                st.success("Net-positive configuration found")
+                                st.json(result.as_dict())
+                        else:
+                                st.warning("No net-positive configuration found in search space")
+                except Exception as exc:
+                        st.error(f"Optimization failed: {exc}")
 
 
 if do_run:
